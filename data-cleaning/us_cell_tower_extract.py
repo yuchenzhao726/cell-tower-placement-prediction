@@ -16,3 +16,11 @@ result = spark.sql("SELECT FLOOR(cell / 256) AS bsid, AVG(lon) AS lon, AVG(lat) 
                    GROUP BY bsid")
 
 result.write.format("parquet").mode("overwrite").save(SAVE_FILE_PATH)
+
+####################################################################################################
+# result schema:
+# root
+#  |-- bsid: integer
+#  |-- lon: double
+#  |-- lat: double
+####################################################################################################
