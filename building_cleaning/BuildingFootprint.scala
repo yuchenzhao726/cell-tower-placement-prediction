@@ -1,6 +1,7 @@
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.{col, explode, udf}
 import geotrellis.vector.{Polygon, Point}
+import org.locationtech.geotrellis.proj4._
 
 
 object BuildingFootprint {
@@ -43,7 +44,9 @@ object BuildingFootprint {
 
   def createPolygon(points: Array[Array[Double]]): Polygon = {
     val coordinates = points.map { case Array(x, y) => Point(x, y) }
-    Polygon(coordinates :+ coordinates.head)
+    val originPolygon = Polygon(coordinates :+ coordinates.head)
+    val targetCRS = CRS.fromEpsgCode(3857)
+    polygon.reproject(LatLng, targetCRS)
   }
 
   def getPolygonCenter(polygon: Polygon): Point = {
