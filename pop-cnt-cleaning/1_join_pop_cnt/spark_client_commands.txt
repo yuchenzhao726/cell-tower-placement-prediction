@@ -66,3 +66,14 @@ val joinedDF = spark.sql("""
 
 joinedDF.write.parquet("bdad_proj/training_set_2")
 
+
+df.select(df.columns.map(colName => {
+    sum(col(colName).isNull.cast("int")).alias(colName + "_null_count")
+}): _*).show()
+
+hadoop fs -get bdad_proj/training_set_2_norm
+zip -r cell_pop.zip ./training_set_2_norm
+gcloud compute scp --recurse nyu-dataproc-m:/home/gw2310_nyu_edu/bdad_proj/cell_pop.zip .
+
+
+
