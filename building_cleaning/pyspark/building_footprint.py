@@ -9,7 +9,9 @@ def get_polygon_center(points):
     centroid = Polygon(points[0]).centroid
     return centroid.x, centroid.y
 
-def get_polygon_area(points, crs_transformer):
+def get_polygon_area(points):
+    # Define the target CRS as a projected CRS suitable for area calculations in square meterss
+    crs_transformer = pyproj.Transformer.from_crs('EPSG:4326', 'EPSG:3395', always_xy=True)
     x_coords, y_coords = zip(*points[0])
     transformed_x, transformed_y = crs_transformer.transform(x_coords, y_coords)
     transformed_points_list = list(zip(transformed_x, transformed_y))
@@ -40,20 +42,14 @@ if __name__ == "__main__":
     df = spark.read.option("multiLine", "true").json(args.input_directory)
 
     # Expand the polygon coordinates under tag features
-    building_df = df.select(explode(col("features")).alias("building"))
+    building_df = df.select(explode(col("features")).alias("building")) \
+                    .select(col("building.geometry.coordinates").alias("coordinates"))
 
-    # Create a flat structured DataFrame
-    flat_building_df = building_df.select(col("building.geometry.coordinates").alias("coordinates"))
-
-    # Define UDFs to get polygon centroid and area
+    # Define UDFs to get polygon centroid
     get_centroid_udf = udf(lambda points:get_polygon_center(points), ArrayType(DoubleType()))
 
-    # Define the target CRS as a projected CRS suitable for area calculations in square meterss
-    transformer = pyproj.Transformer.from_crs('EPSG:4326', 'EPSG:3395', always_xy=True)
-    get_area_udf = udf(lambda points:get_polygon_area(points, transformer), DoubleType())
-
     # Apply UDFs to the coordinates column and create new columns for centroid
-    result_df = flat_building_df.withColumn("polygon_centroid", get_centroid_udf(col("coordinates"))) \
+    result_df = building_df.withColumn("polygon_centroid", get_centroid_udf(col("coordinates"))) \
         .withColumn("center_longitude", col("polygon_centroid")[0]) \
         .withColumn("center_latitude", col("polygon_centroid")[1]) \
         .drop("polygon_centroid")
@@ -72,11 +68,14 @@ if __name__ == "__main__":
         (col("center_latitude") >= TEST_LATITUDE_L)
     )
 
+    # Define UDFs to get polygon area
+    get_area_udf = udf(lambda points:get_polygon_area(points), DoubleType())
+
     # Apply UDF to get polygon area and add new columns as area
     result_train_df = train_df.withColumn("area", get_area_udf(col("coordinates"))).drop("coordinates")
     result_test_df = test_df.withColumn("area", get_area_udf(col("coordinates"))).drop("coordinates")
 
-    result_train_df.write.mode("overwrite").format("parquet").option("compression", "snappy").save(args.training_output)
-    result_test_df.write.mode("overwrite").format("parquet").option("compression", "snappy").save(args.test_output)
+    result_train_df.write.mode("append").format("parquet").option("compression", "snappy").save(args.training_output)
+    result_test_df.write.mode("append").format("parquet").option("compression", "snappy").save(args.test_output)
 
     spark.stop()
