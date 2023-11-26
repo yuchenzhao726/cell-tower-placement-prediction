@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Specify the HDFS directory containing input files
-HDFS_DIR="/user/yl6211_nyu_edu/bdad_project/dataset2"
+HDFS_DIR="/user/yl6211_nyu_edu/bdad_project/dataset"
 TRAIN_DIR="/user/yl6211_nyu_edu/bdad_project/training_dataset"
 TEST_DIR="/user/yl6211_nyu_edu/bdad_project/test_dataset"
 
