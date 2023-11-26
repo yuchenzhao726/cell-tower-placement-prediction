@@ -6,13 +6,13 @@ import pyproj
 import argparse
 
 def get_polygon_center(points):
-    centroid = Polygon(points[0]).centroid
+    centroid = Polygon(points).centroid
     return centroid.x, centroid.y
 
 def get_polygon_area(points):
     # Define the target CRS as a projected CRS suitable for area calculations in square meterss
     crs_transformer = pyproj.Transformer.from_crs('EPSG:4326', 'EPSG:3395', always_xy=True)
-    x_coords, y_coords = zip(*points[0])
+    x_coords, y_coords = zip(*points)
     transformed_x, transformed_y = crs_transformer.transform(x_coords, y_coords)
     transformed_points_list = list(zip(transformed_x, transformed_y))
     transformed_polygon = Polygon(transformed_points_list)
@@ -43,7 +43,7 @@ if __name__ == "__main__":
 
     # Expand the polygon coordinates under tag features
     building_df = df.select(explode(col("features")).alias("building")) \
-                    .select(col("building.geometry.coordinates").alias("coordinates"))
+                    .select(col("building.geometry.coordinates")[0].alias("coordinates"))
 
     # Define UDFs to get polygon centroid
     get_centroid_udf = udf(lambda points:get_polygon_center(points), ArrayType(DoubleType()))
@@ -60,13 +60,13 @@ if __name__ == "__main__":
         (col("center_longitude") >= TRAIN_LONGITUDE_L) &
         (col("center_latitude") <= TRAIN_LATITUDE_H) &
         (col("center_latitude") >= TRAIN_LATITUDE_L)
-    )
+    ).sample(0.3, 123)
     test_df = result_df.filter(
         (col("center_longitude") <= TEST_LONGITUDE_H) &
         (col("center_longitude") >= TEST_LONGITUDE_L) &
         (col("center_latitude") <= TEST_LATITUDE_H) &
         (col("center_latitude") >= TEST_LATITUDE_L)
-    )
+    ).sample(0.3, 123)
 
     # Define UDFs to get polygon area
     get_area_udf = udf(lambda points:get_polygon_area(points), DoubleType())
