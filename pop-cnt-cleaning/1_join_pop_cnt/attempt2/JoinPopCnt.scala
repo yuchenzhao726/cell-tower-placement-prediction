@@ -1,6 +1,6 @@
 // sbt package
-// spark-submit --packages org.apache.sedona:sedona-spark-shaded-3.0_2.12:1.5.0,org.datasyslab:geotools-wrapper:1.5.0-28.2 --conf spark.yarn.maxAppAttempts=1 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer --class JoinPopCnt target/scala-2.12/joinpopcntapp_2.12-1.0.jar 
-// nohup spark-submit --packages org.apache.sedona:sedona-spark-shaded-3.0_2.12:1.5.0,org.datasyslab:geotools-wrapper:1.5.0-28.2 --conf spark.yarn.maxAppAttempts=1 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer --class JoinPopCnt target/scala-2.12/joinpopcntapp_2.12-1.0.jar > run.log 2>&1 &
+// spark-submit --packages org.apache.sedona:sedona-spark-shaded-3.0_2.12:1.5.0,org.datasyslab:geotools-wrapper:1.5.0-28.2 --conf spark.yarn.maxAppAttempts=2 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer --class JoinPopCnt target/scala-2.12/joinpopcntapp_2.12-1.0.jar 
+// nohup spark-submit --packages org.apache.sedona:sedona-spark-shaded-3.0_2.12:1.5.0,org.datasyslab:geotools-wrapper:1.5.0-28.2 --conf spark.yarn.maxAppAttempts=2 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer --class JoinPopCnt target/scala-2.12/joinpopcntapp_2.12-1.0.jar > run.log 2>&1 &
 // yarn application -list -appStates RUNNING
 // yarn application -kill application_1691775874963_33065
 
@@ -11,7 +11,7 @@ import org.locationtech.jts.geom.{GeometryFactory, Coordinate, Point}
 import org.locationtech.jts.io.WKTWriter
 import org.apache.sedona.core.spatialRDD.SpatialRDD
 import org.apache.sedona.sql.utils.Adapter
-// import org.apache.sedona.core.enums.{GridType, IndexType}
+import org.apache.sedona.core.enums.{GridType, IndexType}
 // import org.apache.sedona.core.spatialOperator.JoinQuery
 
 object JoinPopCnt {
@@ -61,19 +61,19 @@ object JoinPopCnt {
 
         // transform to rdd
         val polygonRDD = Adapter.toSpatialRdd(rectangles, "geometry")
-        // val pointRDD = Adapter.toSpatialRdd(points, "geometry")
+        val pointRDD = Adapter.toSpatialRdd(points, "geometry")
 
         // learn about boundaries
         polygonRDD.analyze()
-        // polygonRDD.spatialPartitioning(GridType.KDBTREE)
-        // pointRDD.spatialPartitioning(polygonRDD.getPartitioner)
-        // polygonRDD.buildIndex(IndexType.RTREE, true)
+        polygonRDD.spatialPartitioning(GridType.KDBTREE)
+        pointRDD.spatialPartitioning(polygonRDD.getPartitioner)
+        polygonRDD.buildIndex(IndexType.RTREE, true)
 
         val polygonDF = Adapter.toDf(polygonRDD, spark)
-        // val pointDF = Adapter.toDf(pointRDD, spark)
+        val pointDF = Adapter.toDf(pointRDD, spark)
 
         polygonDF.createOrReplaceTempView("rectangles")
-        points.createOrReplaceTempView("points")
+        pointDF.createOrReplaceTempView("points")
 
         val joinedDF = spark.sql("""
                         SELECT ST_AsText(r.geometry) as rectangle, r.area, r.cell_tower_num, SUM(p.pop_cnt) as pop_cnt_sum
