@@ -1,9 +1,20 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, explode, udf
-from pyspark.sql.types import ArrayType, DoubleType
+from pyspark.sql.functions import col, explode, udf, size, when
+from pyspark.sql.types import ArrayType, DoubleType, StructType, StructField, StringType, MapType
 from shapely.geometry import Polygon
 import pyproj
 import argparse
+
+def parse_coordinates(points, geo_type):
+    # points is a string representation of netsted array
+    coordinates = eval(points)
+    if geo_type == "LineString":
+        return coordinates
+    if geo_type == "Polygon":
+        return coordinates[0]
+    if geo_type == "MultiPolygon":
+        result = [point for polygon in coordinates[0] for point in polygon]
+        return result
 
 def get_polygon_center(points):
     centroid = Polygon(points).centroid
@@ -38,21 +49,34 @@ if __name__ == "__main__":
     # Create the Spark session
     spark = SparkSession.builder.appName("BuildingFootprint").getOrCreate()
 
-    # Read the geoJson file from the directory
-    df = spark.read.option("multiLine", "true").json(args.input_directory)
+    # There are multiple data shape (Polygon, LineString, MultiPolygon) in the geoJson file
+    # With different shape there are different structure inside of coordinates column
+    validSchema = StructType([
+        StructField("type", StringType()),
+        StructField("geometry", StructType([
+          StructField("coordinates", StringType()),
+          StructField("type", StringType(), False)
+        ]), False),
+        StructField("properties", MapType(StringType(), StringType()))
+    ])
 
-    # Expand the polygon coordinates under tag features
-    building_df = df.select(explode(col("features")).alias("building")) \
-                    .select(col("building.geometry.coordinates")[0].alias("coordinates"))
+    # Read the geoJson file from the directory
+    df = spark.read.json(args.input_directory, schema=validSchema).select(col("geometry.coordinates"), col("geometry.type"))
+
+    parse_coordinates_udf = udf(lambda points, geo_type: parse_coordinates(points, geo_type), ArrayType(ArrayType(DoubleType())))
+
+    building_df = df.select("type", parse_coordinates_udf(col("coordinates"), col("type")).alias("uniformed_coordinates")) \
+                    .filter(~(((col("type") == "LineString") & (size(col("uniformed_coordinates")) < 3)) | (col("type") == "Point"))) \
+                    .persist()
 
     # Define UDFs to get polygon centroid
-    get_centroid_udf = udf(lambda points:get_polygon_center(points), ArrayType(DoubleType()))
+    get_centroid_udf = udf(lambda points: get_polygon_center(points), ArrayType(DoubleType()))
 
     # Apply UDFs to the coordinates column and create new columns for centroid
-    result_df = building_df.withColumn("polygon_centroid", get_centroid_udf(col("coordinates"))) \
+    result_df = building_df.withColumn("polygon_centroid", get_centroid_udf(col("uniformed_coordinates"))) \
         .withColumn("center_longitude", col("polygon_centroid")[0]) \
         .withColumn("center_latitude", col("polygon_centroid")[1]) \
-        .drop("polygon_centroid")
+        .drop("polygon_centroid") 
 
     # Filter the result to get the training and test set
     train_df = result_df.filter(
@@ -60,20 +84,20 @@ if __name__ == "__main__":
         (col("center_longitude") >= TRAIN_LONGITUDE_L) &
         (col("center_latitude") <= TRAIN_LATITUDE_H) &
         (col("center_latitude") >= TRAIN_LATITUDE_L)
-    ).sample(0.3, 123)
+    )
     test_df = result_df.filter(
         (col("center_longitude") <= TEST_LONGITUDE_H) &
         (col("center_longitude") >= TEST_LONGITUDE_L) &
         (col("center_latitude") <= TEST_LATITUDE_H) &
         (col("center_latitude") >= TEST_LATITUDE_L)
-    ).sample(0.3, 123)
+    )
 
     # Define UDFs to get polygon area
-    get_area_udf = udf(lambda points:get_polygon_area(points), DoubleType())
+    get_area_udf = udf(lambda points: get_polygon_area(points), DoubleType())
 
     # Apply UDF to get polygon area and add new columns as area
-    result_train_df = train_df.withColumn("area", get_area_udf(col("coordinates"))).drop("coordinates")
-    result_test_df = test_df.withColumn("area", get_area_udf(col("coordinates"))).drop("coordinates")
+    result_train_df = train_df.withColumn("area", get_area_udf(col("uniformed_coordinates"))).drop("uniformed_coordinates").drop("type")
+    result_test_df = test_df.withColumn("area", get_area_udf(col("uniformed_coordinates"))).drop("uniformed_coordinates").drop("type")
 
     result_train_df.write.mode("append").format("parquet").option("compression", "snappy").save(args.training_output)
     result_test_df.write.mode("append").format("parquet").option("compression", "snappy").save(args.test_output)
