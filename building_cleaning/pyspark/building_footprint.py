@@ -1,20 +1,26 @@
+# spark-submit --deploy-mode cluster --conf spark.yarn.maxAppAttempts=5 --py-files pyproj-3.6.1.tar.gz,shapely-2.0.2.tar.gz building_footprint.py <input> <train_output> <test_output>
+
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, explode, udf, size, when
+from pyspark.sql.functions import col, explode, udf, size
 from pyspark.sql.types import ArrayType, DoubleType, StructType, StructField, StringType, MapType
 from shapely.geometry import Polygon
 import pyproj
 import argparse
 
 def parse_coordinates(points, geo_type):
-    # points is a string representation of netsted array
-    coordinates = eval(points)
+    # Regardless the geometry shape we want to convert the output to a list of Polygons [[[x,y]]]
+    # Also need to ensure all the coordinates are in double format (some of them is int in original dataset)
+    # Ignore the possible z coordinates
+    input_data = eval(points)
     if geo_type == "LineString":
-        return coordinates
-    if geo_type == "Polygon":
-        return coordinates[0]
+        return [[[float(coordinate) for coordinate in point[:2]] for point in input_data]]
+    if (geo_type == "Polygon"):
+        return [[[float(coordinate) for coordinate in point[:2]] for point in polygon] for polygon in input_data]
     if geo_type == "MultiPolygon":
-        result = [point for polygon in coordinates[0] for point in polygon]
-        return result
+        if len(input_data) == 1:
+            return [[[float(coordinate) for coordinate in point[:2]] for point in polygon] for polygon in input_data[0]]
+        else:
+            return [[[float(coordinate) for coordinate in point[:2]] for point in polygon[0]] for polygon in input_data]
 
 def get_polygon_center(points):
     centroid = Polygon(points).centroid
@@ -63,10 +69,10 @@ if __name__ == "__main__":
     # Read the geoJson file from the directory
     df = spark.read.json(args.input_directory, schema=validSchema).select(col("geometry.coordinates"), col("geometry.type"))
 
-    parse_coordinates_udf = udf(lambda points, geo_type: parse_coordinates(points, geo_type), ArrayType(ArrayType(DoubleType())))
+    parse_coordinates_udf = udf(lambda points, geo_type: parse_coordinates(points, geo_type), ArrayType(ArrayType(ArrayType(DoubleType()))))
 
-    building_df = df.select("type", parse_coordinates_udf(col("coordinates"), col("type")).alias("uniformed_coordinates")) \
-                    .filter(~(((col("type") == "LineString") & (size(col("uniformed_coordinates")) < 3)) | (col("type") == "Point"))) \
+    building_df = df.select("type", explode(parse_coordinates_udf(col("coordinates"), col("type"))).alias("uniformed_coordinates")) \
+                    .filter(~((size(col("uniformed_coordinates")) < 3) | (col("type") == "Point"))) \
                     .persist()
 
     # Define UDFs to get polygon centroid
