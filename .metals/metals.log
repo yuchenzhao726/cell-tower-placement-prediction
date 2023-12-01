@@ -349,3 +349,4 @@ INFO: Unsupported notification method: $/setTrace
 2023.12.01 15:55:30 WARN  no build target for: /Users/adong850408/BDAD/cell-tower-placement-prediction/elevation-data-cleaning/01. merge-data/build.sbt[0m
 2023.12.01 15:55:30 WARN  no build target for: /Users/adong850408/BDAD/cell-tower-placement-prediction/elevation-data-cleaning/01. merge-data/merge-data.scala[0m
 2023.12.01 15:55:30 WARN  no build target for: /Users/adong850408/BDAD/cell-tower-placement-prediction/elevation-data-cleaning/02.elevation-join-data/join-data.scala[0m
+2023.12.01 16:26:49 WARN  Could not find semantic tokens for: file:///Users/adong850408/BDAD/cell-tower-placement-prediction/elevation-data-cleaning/02.elevation-join-data/build.sbt[0m
