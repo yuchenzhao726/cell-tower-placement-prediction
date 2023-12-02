@@ -8,19 +8,20 @@ INPUT_DIR="$ORIGINAL_DATASET"
 # By default output the combined dataset to OUTPUT_DIR1
 OUTPUT_DIR1="bdad_project/join_output1"
 OUTPUT_DIR2="bdad_project/join_output2"
-OUTPUT_IS_DIR1=true
+# 0=false 1=true
+OUTPUT_IS_DIR1=1
 COMBINED_OUTPUT="$OUTPUT_DIR1"
 
 # List all files in the HDFS directory
 FILES=($(hadoop fs -ls $BUILDING_DATASET | grep "^-" | awk '{print $NF}'))
 
 submit_spark_join_job() {
-  echo $FILE
+  local FILE=$1
   spark-submit --class JoinBuildingData join/target/scala-2.12/join-building-data_2.12-1.0.jar $ORIGINAL_DATASET $FILE $PARTIAL_JOIN_OUTPUT
 }
 
 submit_spark_combine_job() {
-  if [ "$OUTPUT_IS_DIR1" = true ]; then
+  if [ "$OUTPUT_IS_DIR1" = 1 ]; then
     COMBINED_OUTPUT="$OUTPUT_DIR1"
   else
     COMBINED_OUTPUT="$OUTPUT_DIR2"
@@ -38,8 +39,8 @@ for FILE in "${FILES[@]}"; do
 
     submit_spark_combine_job
     wait
-    $INPUT_DIR="$COMBINED_OUTPUT"
-    OUTPUT_IS_DIR1=!$OUTPUT_IS_DIR1
+    INPUT_DIR="$COMBINED_OUTPUT"
+    OUTPUT_IS_DIR1=$((OUTPUT_IS_DIR1 ^ 1))
   fi
 done
 
