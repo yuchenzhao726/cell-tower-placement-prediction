@@ -40,6 +40,6 @@ object DataCombiner {
                AND table1.lat2 == table2.lat2
         """)
 
-        conbimedDF.write.format("parquet").mode("overwrite").save(args(2))
+        combinedDF.write.format("parquet").mode("overwrite").save(args(2))
     }
 }
