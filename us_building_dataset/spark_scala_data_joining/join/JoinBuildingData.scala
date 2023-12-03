@@ -1,6 +1,5 @@
 // sbt package
 
-
 import org.apache.spark.sql._
 
 object JoinBuildingData {
@@ -43,6 +42,6 @@ object JoinBuildingData {
                 locations.lat2
         """)
 
-        result.write.format("parquet").mode("overwrite").save(args(2))
+        result.write.format("parquet").mode("append").save(args(2))
     }
 }
