@@ -5,12 +5,16 @@ import geotrellis.raster.io.geotiff._
 import geotrellis.vector.Extent
 import geotrellis.vector.Point
 
-val inputTiff = "bdad_proj/population.tif"   // file path on local filesystem can be used if on spark client
+// file path on local filesystem can be used if on spark client
+val inputTiff = "bdad_proj/pop_cnt.tif"
+   
 val inputDataDir = "bdad_proj/training_set_1" // file path on hdfs
 val outputDir = "bdad_proj/training_set_2"  // file path on hdfs
 
 val geoTiff: SinglebandGeoTiff = GeoTiffReader.readSingleband(inputTiff)
 val tile = geoTiff.tile
+val hist = tile.histogramDouble
+hist.statistics
 
 // create a rectangle within (42 lat, -71 lon) and (33 lat, -125 lon)
 val filterExtent = Extent(-125, 33, -71, 42) 
