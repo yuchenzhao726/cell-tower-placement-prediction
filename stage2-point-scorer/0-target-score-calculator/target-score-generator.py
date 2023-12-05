@@ -38,7 +38,9 @@ points_adv = spark.sql("""
                     GROUP BY points.lon, points.lat
                   """)
 
+points_adv.cache()
 points_adv.createOrReplaceTempView("points_with_n_and_d")
+points_adv.write.format("parquet").mode("overwrite").save("/user/yz8759_nyu_edu/project/datasets/points_with_n_and_d")
 
 result = spark.sql("""
                     SELECT lon, lat, n, d, score_calculator(n, d) AS score
