@@ -20,13 +20,13 @@ object DataProfiler {
         df.describe().show()
 
         // Filter out buildings with zero area size
-        // OR area size > 200K square meters
+        // OR area size > 500K square meters
         val zeroAreaBuildingCount = df.filter(col("area") === 0).count()
         println(s"No. of Buildings with 0 area: $zeroAreaBuildingCount")
         val largeAreaBuildingCount = df.filter(col("area") >= 500000).count()
         println(s"No. of Buildings with area larger than 500K sqm: $largeAreaBuildingCount")
 
-        val result = df.filter((col("area") =!= 0) && (col("area") < 200000))
+        val result = df.filter((col("area") =!= 0) && (col("area") < 500000))
         result.describe().show()
 
         // Repartition the DataFrame to control the number of output files
