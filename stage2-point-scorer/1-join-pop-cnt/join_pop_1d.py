@@ -3,13 +3,18 @@
 # nohup spark-submit --conf spark.yarn.maxAppAttempts=1 join_pop_1d.py > run.log 2>&1 & 
 
 from pyspark.sql import SparkSession
+import sys
 
 spark = SparkSession.builder.getOrCreate()
 
-points_df = spark.read.parquet("bdad_proj/points_with_score_repar")
+points_file = sys.argv[1]
+pop_file = sys.argv[2]
+output_file = sys.argv[3]
+
+points_df = spark.read.parquet(points_file)
 points_df.createOrReplaceTempView("points")
 
-pop_df = spark.read.parquet("bdad_proj/pop_cnt_5km")
+pop_df = spark.read.parquet(pop_file)
 pop_df.createOrReplaceTempView("pop_table")
 
 result = spark.sql("""
@@ -19,4 +24,4 @@ result = spark.sql("""
         GROUP BY points.lon, points.lat, points.n, points.d, points.score
     """)
     
-result.write.format("parquet").mode("overwrite").save("bdad_proj/5km_points_with_pop_1d")
+result.write.format("parquet").mode("append").save(output_file)
