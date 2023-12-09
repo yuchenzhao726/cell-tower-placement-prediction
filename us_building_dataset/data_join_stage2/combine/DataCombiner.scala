@@ -13,31 +13,37 @@ object DataCombiner {
         val spark = SparkSession.builder().appName("DataCombiner").getOrCreate()
 
         // Dataframe containing the original random area 
-        var df1 = spark.read.format("parquet").load(args(0))
+        val df1 = spark.read.format("parquet").load(args(0))
         df1.createOrReplaceTempView("table1")
 
         // Dataframe containing the newly generated building dataset
         val df2 = spark.read.format("parquet").load(args(1))
-        df2.groupBy("lon1", "lat1", "lon2", "lat2")
-            .agg(
-                sum("building_count").alias("total_building_cnt"), 
-                sum("building_area").alias("total_building_area"))
-            .createOrReplaceTempView("table2")
+        df2.createOrReplaceTempView("table2")
 
         val combinedDF = spark.sql("""
             SELECT 
                 table1.*,
-                table2.total_building_cnt, 
-                table2.total_building_area
+                table2.building_cnt_1d, 
+                table2.building_area_1d,
+                table2.building_cnt_2d, 
+                table2.building_area_2d,
+                table2.building_cnt_3d, 
+                table2.building_area_3d,
+                table2.building_cnt_6d, 
+                table2.building_area_6d,
+                table2.building_cnt_10d, 
+                table2.building_area_10d,
+                table2.building_cnt_20d, 
+                table2.building_area_20d,
+                table2.building_cnt_40d, 
+                table2.building_area_40d
             FROM 
                 table1
             JOIN 
                 table2 
             ON 
-               table1.lon1 == table2.lon1
-               AND table1.lat1 == table2.lat1
-               AND table1.lon2 == table2.lon2
-               AND table1.lat2 == table2.lat2
+               table1.lon == table2.lon
+               AND table1.lat == table2.lat
         """)
 
         combinedDF.write.format("parquet").mode("overwrite").save(args(2))
