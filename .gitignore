@@ -1,0 +1,6 @@
+stage2-point-scorer/data/
+predictions.csv
+real_data/
+testsetcsv/
+*.csv
+_SU*
