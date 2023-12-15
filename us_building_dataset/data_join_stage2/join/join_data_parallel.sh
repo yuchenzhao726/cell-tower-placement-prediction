@@ -1,8 +1,8 @@
 #!/bin/bash
 
-ORIGINAL_DATASET="bdad_project/points_with_score"
-BUILDING_DATASET="bdad_project/partitioned_train_dataset"
-PARTIAL_JOIN_OUTPUT="bdad_project/partial_join_output_stage2"
+ORIGINAL_DATASET="bdad_project/testset"
+BUILDING_DATASET="bdad_project/partitioned_test_dataset"
+PARTIAL_JOIN_OUTPUT="bdad_project/partial_join_test_stage2"
 
 # List all files in the HDFS directory
 FILES=($(hadoop fs -ls $BUILDING_DATASET | grep "^-" | awk '{print $NF}'))
