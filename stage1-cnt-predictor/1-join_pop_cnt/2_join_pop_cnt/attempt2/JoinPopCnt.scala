@@ -32,7 +32,7 @@ object JoinPopCnt {
 
 	    val dfRectangles = spark.read.parquet(towerInputDir)
 
-	    // build rectangle object by its points
+	    // build java polygon object for random generated rectangle by its points
 	    val dfRectanglesWithGeom = dfRectangles.map(row => {
 	        val coordinates = Array(
 		        new Coordinate(row.getDouble(0), row.getDouble(1)),
@@ -43,10 +43,13 @@ object JoinPopCnt {
 	        ) 
 	        val geometryFactory = new GeometryFactory()
 	        val polygon = new GeometryFactory().createPolygon(coordinates)
+			// serialization tools
 	        val wktWriter = new WKTWriter()
 	        (wktWriter.write(polygon), row.getDouble(4), row.getLong(5))
 	    }).toDF("geometry", "area", "cell_tower_num")
 	    dfRectanglesWithGeom.createOrReplaceTempView("rectanglesWithGeom")
+		// just use a stupid method to get a dataframe whose geometry is a java object not a serialized string、
+		// ST_GeomFromWKT is for deserialization
 	    val rectangles = spark.sql("SELECT ST_GeomFromWKT(geometry) AS geometry, area, cell_tower_num FROM rectanglesWithGeom")
 
 	    // build point object
@@ -57,24 +60,32 @@ object JoinPopCnt {
 	        (wktWriter.write(point), row.getDouble(2))
 	    }).toDF("geometry", "pop_cnt")
 	    dfPointsWithGeom.createOrReplaceTempView("pointsWithGeom")
+		// the same way as polygon object
 	    val points = spark.sql("SELECT ST_GeomFromWKT(geometry) AS geometry, pop_cnt FROM pointsWithGeom")
 
-        // transform to rdd
+        // dataframe has to be transformed to RDD for knowing spatial boundary
+        // otherwise, there is null point exception when doing SQL queries in the final step
         val polygonRDD = Adapter.toSpatialRdd(rectangles, "geometry")
         val pointRDD = Adapter.toSpatialRdd(points, "geometry")
 
         // learn about boundaries
         polygonRDD.analyze()
+		// build spatail partition
         polygonRDD.spatialPartitioning(GridType.KDBTREE)
+		// make the partition of points the same as polygons
         pointRDD.spatialPartitioning(polygonRDD.getPartitioner)
+		// build spatial index
         polygonRDD.buildIndex(IndexType.RTREE, true)
 
+		// convert back to dataframe 
         val polygonDF = Adapter.toDf(polygonRDD, spark)
         val pointDF = Adapter.toDf(pointRDD, spark)
 
         polygonDF.createOrReplaceTempView("rectangles")
         pointDF.createOrReplaceTempView("points")
 
+		// ST_AsText for serialization
+		// WHERE ST_Contains(r.geometry, p.geometry) for an inner join between points and the regions containing these points.
         val joinedDF = spark.sql("""
                         SELECT ST_AsText(r.geometry) as rectangle, r.area, r.cell_tower_num, SUM(p.pop_cnt) as pop_cnt_sum
                         FROM rectangles r, points p

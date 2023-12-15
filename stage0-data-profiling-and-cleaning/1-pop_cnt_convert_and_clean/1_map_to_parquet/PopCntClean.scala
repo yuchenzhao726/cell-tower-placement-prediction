@@ -21,20 +21,24 @@ object PopCntClean {
 
         import spark.implicits._
 
-        val inputTiff = new Path("/user/gw2310_nyu_edu/bdad_proj/pop_cnt_5km.tif")  
+		// file path on HDFS
+        val inputTiff = new Path("/user/gw2310_nyu_edu/bdad_proj/pop_cnt_1km.tif")  
         val outputDir = "/user/gw2310_nyu_edu/bdad_proj/pop_cnt_clean"
 
+		// use distributed io to read data on HDFS
+		// the whole tile will be splited into several tiffRDD
         val geoTiffRDD = HadoopGeoTiffRDD.spatial(inputTiff)(sc)
 
-        // create a rectangle within (42 lat, -71 lon) and (33 lat, -125 lon)
+        // create a rectangle determined by (42 lat, -71 lon) and (33 lat, -125 lon)
         val filterExtent = Extent(-125, 33, -71, 42)
 
-        // filter in extent intersected with the rectangle
+        // first filter: keep tileRdd intersected with the research scope
+		// some intersected tileRdds may contain points outside research scope
         val filteredRDD = geoTiffRDD.filter { case (key, tile) =>
             filterExtent.intersects(key.extent)
         }
 
-        // filter in valid data in the rectangle
+        // second filter: for each tileRDD, get valid point as a row in rdd, which avoids converting in the last step
         val records = filteredRDD.flatMap { case (key, tile) =>
             val rasterExtent = RasterExtent(key.extent, tile.cols, tile.rows)
             for {
@@ -50,13 +54,6 @@ object PopCntClean {
             }
         }
 
-        // normalize data between 0 and 1 by x-min/max-min
-        // val maxPopDen = records.map(row => row.getDouble(2)).max()
-        // val normalizedRecords = records.map(row => {
-        //    Row(row.getDouble(0), row.getDouble(1), row.getDouble(2) / maxPopDen)
-        // })
-
-        // create popDen dataframe
         val schema = StructType(
             List(
                 StructField("lon", DoubleType, false),

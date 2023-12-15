@@ -1,0 +1,24 @@
+// create a rectangle within (42 lat, -71 lon) and (33 lat, -125 lon)
+val filterExtent = Extent(-125, 33, -71, 42) 
+
+// filter in valid data in the rectangle for the whole tile
+// driver will be killed when processing the whole tile
+val records = for {
+  col <- 0 until tile.cols
+  row <- 0 until tile.rows
+  latlon = geoTiff.rasterExtent.gridToMap(col, row)
+  if filterExtent.contains(Point(latlon._1, latlon._2))
+  pop_den = tile.getDouble(col, row)
+  if !pop_den.isNaN
+} yield {
+  (latlon._1, latlon._2, pop_cnt)
+}
+
+// not efficient because of type converting
+val df = records.toSeq.toDF("lon", "lat", "pop_cnt")
+
+df.write.mode("overwrite").parquet(outputDir)
+
+
+
+
